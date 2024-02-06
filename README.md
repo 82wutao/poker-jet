@@ -1,7 +1,7 @@
 # 基本环境
 1 下载并安装python3，https://www.python.org/downloads/windows/  
 2 将python目录加入path 环境变量，可从cmd执行python 命令  
-3 下载代码     ？？？？？？？？？？？？？？？？
+3 下载代码    git@github.com:82wutao/poker-jet.git
 # 开发环境
 1 在代码根目录创建虚拟环境，并激活
 ```py
