@@ -1,0 +1,66 @@
+find(
+    filter=None,                   这个 filter 参数是所有结果都必须匹配的原型文档。
+    projection=None,               这个 projection 参数用于指定应包含在结果文档中的字段子集。
+
+    collation=None,                Collation的实例。{collation: {locale: "zh"}}
+    允许MongoDB的用户根据不同的语言定制排序规则
+    此选项仅在MongoDB 3.4及更高版本上受支持。
+    hint=None,                     传入一个制定的索引，强迫查询使用该索引。{"index_name": 1}
+    把这个作为呼叫的替代 hint() 在游标上告诉Mongo要用于查询的正确索引。
+
+    sort=None,                     指定此查询的排序顺序的（键、方向）对列表。
+    skip=0,                        返回结果时要忽略的文档数
+    limit=0,                       要返回的最大结果数。限制为0（默认值）相当于不设置限制。
+
+    # 游标特性
+    no_cursor_timeout=False,       如果为False（默认值），服务器将在10分钟不活动后关闭任何返回的游标。
+    如果设置为True，则返回的游标在服务器上永远不会超时。
+    应注意确保未打开“无光标超时”的游标已正确关闭。
+    cursor_type=CursorType.NON_TAILABLE,
+    要返回的光标类型。有效选项由定义 CursorType ：
+    NON_TAILABLE - 此find调用的结果将在结果集上返回一个标准光标。
+    TAILABLE - 这个find调用的结果是一个可裁剪的游标-可裁剪的游标只用于capped集合。
+    当检索到最后一个数据时，它们不会关闭，而是保持打开状态，光标位置标记最终文档位置。
+    如果收到更多的数据，光标的迭代将从最后一个收到的文档开始继续。
+    有关详细信息，请参见 tailable cursor documentation .
+    TAILABLE_AWAIT - 这个find调用的结果将是一个设置了await标志的可裁剪游标。
+    在返回完整的结果集之后，服务器将等待几秒钟，以便可以捕获并返回在查询期间添加的其他数据。
+    EXHAUST - 这个find调用的结果将是一个耗尽光标。
+    MongoDB将批处理结果流式传输到客户端，而不等待客户端请求每个批处理，从而减少延迟。
+    请参阅下面关于兼容性的说明。
+
+
+    batch_size=0,                  限制单个批中返回的文档数。
+
+
+
+
+    allow_partial_results=False,   如果为True，则mongos将在某些碎片关闭时返回部分结果，而不是返回错误。
+    max_time_ms=None,              指定查询操作的时间限制。
+    如果超过指定的时间，操作将中止，并且 ExecutionTimeout 提高了。
+    把这个作为呼叫的替代 max_time_ms() 在光标上。
+
+    max=None,                      字段、限制对的列表，按顺序指定特定索引的所有键的独占上限。
+    把这个作为呼叫的替代 max() 在光标上。
+    hint 还必须传递，以确保查询使用正确的索引。
+    min=None,                      按顺序指定特定索引的所有键的包含下限的字段、限制对的列表。
+    把这个作为呼叫的替代 min() 在光标上。
+    hint 还必须传递，以确保查询使用正确的索引。
+
+    return_key=False,              如果为True，修改游标以返回索引键而不是文档
+    show_record_id=False,          如果为True，则添加一个字段 $recordId 在每个文档中使用存储引擎的内部记录标识符。
+
+    comment=None,                  附加到查询的字符串，以帮助解释和跟踪服务器日志和配置文件数据中的操作。
+    把这个作为呼叫的替代 comment() 在光标上。
+
+    session=None                   a ClientSession
+
+    modifiers=None,                DEPRECATED - 指定其他MongoDB查询修饰符的dict。请改用上面列出的关键字参数。
+    oplog_replay=False,            DEPRECATED - 如果为True，则设置oplogReplay查询标志。默认值：False。
+    manipulate=True,               DEPRECATED - 如果为True，请在返回之前应用所有传出子操纵器。默认值：True。
+    max_scan=None,                 DEPRECATED - 要扫描的最大文档数。把这个作为呼叫的替代 max_scan() 在光标上。
+    snapshot=False,                DEPRECATED - 如果为True，则阻止光标由于中间的写入操作而多次返回文档。
+    allow_disk_use                 如果为True，MongoDB在处理分块排序操作时可能会使用临时磁盘文件来存储超过系统内存限制的数据。
+    如果MongoDB可以使用索引满足指定的排序，或者如果阻塞排序所需的内存少于100mib限制，则该选项无效。
+    此选项仅在MongoDB 4.4及更高版本上受支持。
+)

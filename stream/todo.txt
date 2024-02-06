@@ -1,0 +1,122 @@
+从生成器 迭代器 可迭代集合 stream
+
+过滤
+转换
+合并
+
+收集
+处理
+
+4
+　　简单介绍了API接口定义之后，我们开始深入探讨流的内部实现。
+
+　　流由两个重要的部分所组成，"当前数据项(head)"和"下一数据项的求值函数(nextItemEvalProcess)"。
+　　其中，nextItemEvalProcess是流能够实现"惰性求值"的关键。
+4.1 stream流在使用过程中的三个阶段
+　　1.  生成并构造一个流 (List.stream() 等方法)
+　　2.  在流的处理过程中添加、绑定惰性求值流程  (map、filter、limit 等方法)
+　　3.  对流使用强制求值函数，生成最终结果 (max、collect、forEach等方法)
+
+生成并构造一个流
+　　流在生成时是"纯净"的，其最初的NextItemEvalProcess求值之后就是指向自己的下一个元素。
+　　我们以一个Integer整数流的生成为例。IntegerStreamGenerator.getIntegerStream(1,10) 会返回一个流结构，其逻辑上等价于一个从1到10的整数流。但实质是一个惰性求值的stream对象，这里称其为IntStream，其NextItemEvalProcess是一个闭包，方法体是一个递归结构的求值函数，其中下界参数low = low + 1。
+　　当IntStream第一次被求值时，流开始初始化，isStart = false。当初始化完成之后，每一次求值，都会生成一个新的流对象，其中head(low) = low + 1。当low > high时，流被终止，返回空的流对象。
+    jdk的集合容器都实现了Iterator迭代器接口，通过迭代器我们可以轻易的取得容器的下一项元素，而不用关心容器内部实现细节。换句话说，只要实现过迭代器接口，就可以自然的转化为stream流，从而获得流计算的所有能力。
+
+在流的处理过程中添加、绑定惰性求值流程
+　　我们以map接口举例说明。
+    API的map接口是一个惰性求值接口，在流执行了map方法后(stream.map())，不会进行任何的求值运算。
+    map在执行时，会生成一个新的求值过程NextItemEvalProcess，新的过程将之前流的求值过程给"包裹"起来了，仅仅是在"流的生成"到"流的最终求值"之间增加了一道处理工序，最终返回了一个新的stream流对象。
+
+　　API.map所依赖的内部静态map方法是一个惰性求值方法，其每次调用"只会"将当前流的head部分进行map映射操作，并且生成一个新的流。
+    新生成流的NextItemEvalProcess和之前逻辑基本保持一致(递归)，唯一的区别是，第二个参数传入的stream在调用方法之前会被强制求值(eval)后再传入。
+
+
+对流使用强制求值函数，生成最终结果
+　　我们以forEach方法举例说明。强制求值方法forEach会不断的对当前stream进行求值并让consumer接收处理，直到当前流成为空流。
+    有两种可能的情况会导致递归传入的流参数成为空流(empty-stream)：
+　　1. 最初生成流的求值过程返回了空流(整数流，low > high 时，返回空流 )
+　　2. limit之类的短路操作，会提前终止流的求值返回空流(n == 0 时，返回空流)
+
+collect方法
+　　collect方法是强制求值方法中，最复杂也最强大的接口，其作用是将流中的元素收集(collect)起来，并转化成特定的数据结构。
+
+　　从函数式编程的角度来看，collect方法是一个高阶函数，其接受三个函数作为参数(supplier，accumulator，finisher)，最终生成一个更加强大的函数。
+    在java中，三个函数参数以Collector实现对象的形式呈现。
+
+　　supplier 方法：用于提供收集collect的初始值。
+　　accumulator 方法：用于指定收集过程中，初始值和流中个体元素聚合的逻辑。
+　　finnisher 方法：用于指定在收集完成之后的收尾转化操作(例如：StringBuilder.toString() ---> String)。
+
+// 生成整数流 1-10
+Stream<Integer> intStream = IntegerStreamGenerator.getIntegerStream(1,10);
+
+// intStream基础上过滤出偶数
+Stream<Integer> filterStream =  intStream.filter(item-> item%2 == 0);
+
+// filterStream基础上映射为平方
+Stream<Integer> mapStream = filterStream.map(item-> item * item);
+
+// mapStream基础上截取前两个
+Stream<Integer> limitStream = mapStream.limit(2);
+
+// 最终结果累加求和(初始值为0)
+Integer sum = limitStream.reduce(0,(i1,i2)-> i1+i2);
+
+System.out.println(sum); // 20
+https://www.cnblogs.com/xiaoxiongcanguan/p/10511233.html
+
+
+
+
+
+
+mapreduce确保每个reduce的输入都是按照键值排序的，系统执行排序，将map的输入作为reduce的输入过程称之为shuffle过程。
+shuffle也是我们优化的重点部分。shuffle流程图如下图所示：
+
+2.1、map端
+在生成map之前，会计算文件分片的大小：计算源码详见：hadoop2.7作业提交详解之文件分片
+
+然后会根据分片的大小计算map的个数，对每一个分片都会产生一个map作业，或者是一个文件（小于分片大小*1.1）生成一个map作业，然后通过自定的map方法进行自定义的逻辑计算，计算完毕后会写到本地磁盘。
+在这里不是直接写入磁盘，为了保证IO效率，采用了先写入内存的环形缓冲区，并做一次预排序（快速排序）。缓冲区的大小默认为100MB（可通过修改配置项mpareduce.task.io.sort.mb进行修改），当写入内存缓冲区的大小到达一定比例时，默认为80%（可通过mapreduce.map.sort.spill.percent配置项修改）,将启动一个溢写线程将内存缓冲区的内容溢写到磁盘（spill to disk），这个溢写线程是独立的，不影响map向缓冲区写结果的线程，在溢写到磁盘的过程中，map继续输入到缓冲中，如果期间缓冲区被填满，则map写会被阻塞到溢写磁盘过程完成。
+
+溢写是通过轮询的方式将缓冲区中的内存写入到本地mapreduce.cluster.local.dir目录下。在溢写到磁盘之前，我们会知道reduce的数量，然后会根据reduce的数量划分分区，默认根据hashpartition对溢写的数据写入到相对应的分区。
+在每个分区中，后台线程会根据key进行排序，所以溢写到磁盘的文件是分区且排序的。如果有combiner函数，它在排序后的输出运行，使得map输出更紧凑。减少写到磁盘的数据和传输给reduce的数据。
+
+每次环形换冲区的内存达到阈值时，就会溢写到一个新的文件，因此当一个map溢写完之后，本地会存在多个分区切排序的文件。在map完成之前会把这些文件合并成一个分区且排序(归并排序)的文件，可以通过参数mapreduce.task.io.sort.factor控制每次可以合并多少个文件。
+在map溢写磁盘的过程中，对数据进行压缩可以提交速度的传输，减少磁盘io，减少存储。默认情况下不压缩，使用参数mapreduce.map.output.compress控制，压缩算法使用mapreduce.map.output.compress.codec参数控制。
+
+2.2、reduce端
+map任务完成后，监控作业状态的application master便知道map的执行情况，并启动reduce任务，
+application master并且知道map输出和主机之间的对应映射关系，reduce轮询application master便知道主机所要复制的数据。
+
+一个Map任务的输出，可能被多个Reduce任务抓取。
+每个Reduce任务可能需要多个Map任务的输出作为其特殊的输入文件，而每个Map任务的完成时间可能不同，当有一个Map任务完成时，Reduce任务就开始运行。
+Reduce任务根据分区号在多个Map输出中抓取（fetch）对应分区的数据，这个过程也就是Shuffle的copy过程。。
+reduce有少量的复制线程，因此能够并行的复制map的输出，默认为5个线程。可以通过参数mapreduce.reduce.shuffle.parallelcopies控制。
+
+这个复制过程和map写入磁盘过程类似，也有阀值和内存大小，阀值一样可以在配置文件里配置，而内存大小是直接使用reduce的tasktracker的内存大小，复制时候reduce还会进行排序操作和合并文件操作。
+   如果map输出很小，则会被复制到Reducer所在节点的内存缓冲区，缓冲区的大小可以通过mapred-site.xml文件中的mapreduce.reduce.shuffle.input.buffer.percent指定。
+   一旦Reducer所在节点的内存缓冲区达到阀值，或者缓冲区中的文件数达到阀值，则合并溢写到磁盘。
+
+   如果map输出较大，则直接被复制到Reducer所在节点的磁盘中。
+   随着Reducer所在节点的磁盘中溢写文件增多，后台线程会将它们合并为更大且有序的文件。
+   当完成复制map输出，进入sort阶段。这个阶段通过归并排序逐步将多个map输出小文件合并成大文件。最后几个通过归并合并成的大文件作为reduce的输出
+
+2.3、总结
+
+当Reducer的输入文件确定后，整个Shuffle操作才最终结束。之后就是Reducer的执行了，最后Reducer会把结果存到HDFS上。
+
+在Hadoop集群环境中，大部分map 任务与reduce任务的执行是在不同的节点上。当然很多情况下Reduce执行时需要跨节点去拉取其它节点上的map任务结果。如果集群正在运行的job有很多，那么task的正常执行对集群内部的网络资源消耗会很严重。这种网络消耗是正常的，我们不能限制，能做的就是最大化地减少不必要的消耗。还有在节点内，相比于内存，磁盘IO对job完成时间的影响也是可观的。从最基本的要求来说，我们对Shuffle过程的期望可以有：
+
+1、完整地从map task端拉取数据到reduce 端。
+2、在跨节点拉取数据时，尽可能地减少对带宽的不必要消耗。
+3、减少磁盘IO对task执行的影响。
+
+在MapReduce计算框架中，主要用到两种排序算法：快速排序和归并排序。在Map任务发生了2次排序，Reduce任务发生一次排序：
+
+1、第1次排序发生在Map输出的内存环形缓冲区，使用快速排序。当缓冲区达到阀值时，在溢写到磁盘之前，后台线程会将缓冲区的数据划分成相应分区，在每个分区中按照键值进行内排序。
+
+2、第2次排序是在Map任务输出的磁盘空间上将多个溢写文件归并成一个已分区且有序的输出文件。由于溢写文件已经经过一次排序，所以合并溢写文件时只需一次归并排序即可使输出文件整体有序。
+
+3、第3次排序发生在Shuffle阶段，将多个复制过来的Map输出文件进行归并，同样经过一次归并排序即可得到有序文件。
